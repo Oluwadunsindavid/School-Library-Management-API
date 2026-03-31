@@ -1,7 +1,6 @@
 const Author = require("../models/authors");
 // import { create, find, findById, findByIdAndUpdate, findByIdAndDelete } from "../models/authors";
 
-
 // Create a new author
 exports.createAuthor = async (req, res) => {
   try {

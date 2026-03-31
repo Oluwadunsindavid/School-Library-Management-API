@@ -1,6 +1,7 @@
 // All the logics to speak to my book are written here
 // When writing book logic, you are talking to book model and book model is talking to the database
 const Book = require("../models/book");
+const Author = require("../models/authors");
 
 // Logic so that we can have the ability to borrow book
 
@@ -143,12 +144,95 @@ exports.createBooks = async (req, res) => {
 };
 
 // get all books
+// exports.getBooks = async (req, res) => {
+//   try {
+//     const book = await Book.find();
+//     res.status(200).json(book);
+//   } catch (err) {
+//     res.status(500).json({ error: err.message });
+//   }
+// };
+
+// GET ALL BOOKS BUT WITH PAGINATION THIS TIME AROUND
+// exports.getBooks = async (req, res) => {
+//   try {
+//     // get query params
+//     let { page = 1, limit = 10 } = req.query;
+
+//     // convert to numbers
+//     page = parseInt(page);
+//     limit = parseInt(limit);
+
+//     const skip = (page - 1) * limit;
+
+//     // total books count
+//     const total = await Book.countDocuments();
+
+//     // fetch paginated books
+//     const books = await Book.find()
+//       .populate("authors")
+//       .populate("issuedBy")
+//       .populate("borrowedBy")
+//       .skip(skip)
+//       .limit(limit);
+
+//     res.status(200).json({
+//       total,
+//       page,
+//       limit,
+//       totalPages: Math.ceil(total / limit),
+//       books,
+//     });
+//   } catch (err) {
+//     res.status(500).json({ message: err.message });
+//   }
+// };
+
+// GET ALL BOOKS BUT WITH PAGINATION, SEARCH AND FILTER THIS TIME AROUND
 exports.getBooks = async (req, res) => {
   try {
-    const book = await Book.find();
-    res.status(200).json(book);
+    let { page = 1, limit = 10, search = "" } = req.query;
+
+    page = parseInt(page);
+    limit = parseInt(limit);
+
+    const skip = (page - 1) * limit;
+
+    let query = {};
+
+    // 🔥 SEARCH LOGIC (TITLE + AUTHOR NAME)
+    if (search) {
+      // find authors that match search
+      const authors = await Author.find({
+        name: { $regex: search, $options: "i" },
+      });
+
+      const authorIds = authors.map((a) => a._id);
+
+      query.$or = [
+        { title: { $regex: search, $options: "i" } },
+        { authors: { $in: authorIds } },
+      ];
+    }
+
+    const total = await Book.countDocuments(query);
+
+    const books = await Book.find(query)
+      .populate("authors")
+      .populate("issuedBy")
+      .populate("borrowedBy")
+      .skip(skip)
+      .limit(limit);
+
+    res.status(200).json({
+      total,
+      page,
+      limit,
+      totalPages: Math.ceil(total / limit),
+      books,
+    });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ message: err.message });
   }
 };
 
@@ -158,15 +242,15 @@ exports.getBookById = async (req, res) => {
     // step 1: get id from params
     const { id } = req.params;
 
-  //   // step 2: find book + populate authors
-  //   const book = await Book.findById(id)
-  //   .populate("authors");
-  //   .populate("issuedBy");   // 🔥 add this
-  // .populate("borrowedBy");
-  const book = await Book.findById(id)
-    .populate("authors", "name")
-    .populate("issuedBy", "name email")
-    .populate("borrowedBy", "name matricNumber");
+    //   // step 2: find book + populate authors
+    //   const book = await Book.findById(id)
+    //   .populate("authors");
+    //   .populate("issuedBy");   // 🔥 add this
+    // .populate("borrowedBy");
+    const book = await Book.findById(id)
+      .populate("authors", "name")
+      .populate("issuedBy", "name email")
+      .populate("borrowedBy", "name matricNumber");
 
     // step 3: check if not found
     if (!book) {
@@ -200,8 +284,7 @@ exports.updateBookById = async (req, res) => {
 exports.deleteBook = async (req, res) => {
   try {
     const deletedBook = await Book.findByIdAndDelete(req.params.id);
-    if (!deletedBook)
-      return res.status(404).json({ error: "Book not found" });
+    if (!deletedBook) return res.status(404).json({ error: "Book not found" });
     res.status(200).json({ message: "Book deleted successfully" });
   } catch (err) {
     res.status(500).json({ error: err.message });
